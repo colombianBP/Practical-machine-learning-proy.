@@ -1,0 +1,74 @@
+---
+title: "Predicting the quality of activity from accelerometer data"
+author: "colombianBP"
+date: "6/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). We will be using training and testing data from the following links: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv and https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv respectively. 
+
+```{r,echo=FALSE,results='hide',warning=FALSE,message=FALSE}
+library(caret)
+trainData<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+testData<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+library(parallel)
+library(doParallel)
+```
+
+## Exploratory data analysis
+
+We have 159 variables related to a factor variable measuring quality by grouping on five categories, A, B, C, D, and E. for our analysis it is therefore essential to set this variable as a factor. then, to ensure the quality of our data, the percentage of NA was calculated for each variable on the testing set, this is done in order to only use variables which can actually predict our data. finally an issue with the first variable was found, as it is a row index and our data is ordered by the responce, it was therefore removed.
+
+```{r}
+trainData$classe<-factor(trainData$classe)
+trainData<-trainData[,-1]
+testData<-testData[,-1]
+
+Nas<-vector(mode='numeric')
+for( i in colnames(testData)){
+ Nas<-append(Nas,sum(is.na(testData[[i]]))/length(testData[[i]]))
+}
+dataNa<-data.frame(Nas,Colnames=colnames(testData))
+dataNa<-subset(dataNa,Nas!=0)
+```
+
+
+We can appreciate how several variables (100) have less than 3% of the total data recorded, and will not be taken to account for this reason. all other variables present no NA values. The following code removes them from our data frames.
+
+```{r}
+trainData<-trainData[,!names(trainData) %in% dataNa$Colnames]
+testData<-testData[,!names(testData) %in% dataNa$Colnames]
+```
+
+### Model building
+
+We are left with 19622 samples of 59 variables. As we have a very significant number of samples and limited computational power, only the random forest method will be used to train our model. an additional partition has been made in order to get the out of sample error.
+
+```{r,warning=F,message=F,results=F}
+set.seed(123)
+partition<-createDataPartition(y=trainData$classe,p=0.7,list = F)
+train1<-trainData[partition,]
+train2<-trainData[-partition,]
+
+
+#Train model
+fit <- train(classe~., method="rf",data=train1)
+```
+
+Finally, we need to get the out of sample error, and predict the results we would get on the testing set.
+
+```{r}
+predictions<-predict(fit,train2)
+print(confusionMatrix(predictions,train2$classe))
+
+print(predict(fit,testData))
+```
+
+We got an out of sample error of almost zero, proving our method to predict data almost perfectly.
+
